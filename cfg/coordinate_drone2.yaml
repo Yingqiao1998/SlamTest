@@ -1,0 +1,9 @@
+# /coordinate:
+#   ros__parameters:
+odom_sub: "/mavros/uas_3/global_position/local"
+imu_sub: "/mavros/uas_3/imu/data"
+geo_sub: "/mavros/uas_3/global_position/global"
+geo_real_sub: "/mavros/uas_4/global_position/raw/fix"
+detect_sub: "/robot2/detect_objects"
+loc_pub: "target_info"
+target_real_sub: "/mavros/uas_4/global_position/local"

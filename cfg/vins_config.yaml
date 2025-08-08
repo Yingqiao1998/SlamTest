@@ -1,0 +1,58 @@
+%YAML:1.0
+
+# IMU settings
+acc_n: 0.08
+acc_w: 0.00004
+gyr_n: 0.004
+gyr_w: 0.000002
+g_norm: 9.8
+
+# IMU topic  
+imu_topic: "/mavros/uas_2/imu/data"
+imu: 1
+
+# Camera settings
+image0_topic: "/robot1/camera/image_raw"
+image1_topic: "/robot1/camera/image_raw"
+num_of_cam: 1
+image_width: 1920
+image_height: 1080
+
+# Feature tracker settings
+max_cnt: 150
+min_dist: 30
+freq: 10
+F_threshold: 1.0
+show_track: 1
+equalize: 1
+fisheye: 0
+flow_back: 1
+
+# Optimization parameters
+max_solver_time: 0.04
+max_num_iterations: 8
+keyframe_parallax: 10.0
+
+# Multiple thread
+multiple_thread: 1
+
+# Camera calibration file
+cam0_calib: "camera_config.yaml"
+
+# Extrinsic parameters
+estimate_extrinsic: 0
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [1.0, 0.0, 0.0, 0.0,
+          0.0, 1.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0,
+          0.0, 0.0, 0.0, 1.0]
+
+# Time delay
+estimate_td: 0
+td: 0.0
+
+# Other settings
+output_path: "/home/sim/ros2-algorithm-sim/src/slam/output"

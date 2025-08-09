@@ -4,9 +4,10 @@
 
 #include "../estimator/parameters.h"
 #include "mavros/frame_tf.hpp"
+#include <chrono>
+#include <cv_bridge/cv_bridge.h>
 #include <signal.h>
 #include <thread>
-#include <chrono>
 
 namespace slam_composition {
 SlamComponent::SlamComponent(const rclcpp::NodeOptions &options) : Node("slam", options) {
@@ -335,86 +336,58 @@ void SlamComponent::imuCallback(const mavros_msgs::msg::GimbalDeviceAttitudeStat
   _estimator->inputIMU(timestamp, linear_acceleration, angular_velocity);
 }
 
-// 图像数据回调函数
+// 图像数据回调函数（cv_bridge 版）
 void SlamComponent::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
-  // 提取图像时间戳
-  double timestamp = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
+  const double timestamp = static_cast<double>(msg->header.stamp.sec) +
+                           static_cast<double>(msg->header.stamp.nanosec) * 1e-9;
 
-  // RCLCPP_WARN(get_logger(), "Received image - encoding: %s, size: %dx%d", msg->encoding.c_str(),
-  //             msg->width, msg->height);
-
-  // 验证图像数据
   if (msg->encoding.empty() || msg->width == 0 || msg->height == 0 || msg->data.empty()) {
     RCLCPP_WARN(get_logger(), "Invalid frame data message!");
     return;
   }
 
   try {
-    cv::Mat frame;
+    cv::Mat gray_frame;
 
-    // 根据编码格式处理图像
-    if (msg->encoding == "rgb8") {
-      // RGB8格式
-      frame = cv::Mat(msg->height, msg->width, CV_8UC3);
-      memcpy(frame.data, msg->data.data(), msg->data.size());
-      cv::cvtColor(frame, frame, cv::COLOR_RGB2BGR);
-    } else if (msg->encoding == "bgr8") {
-      // BGR8格式
-      frame = cv::Mat(msg->height, msg->width, CV_8UC3);
-      memcpy(frame.data, msg->data.data(), msg->data.size());
-    } else if (msg->encoding == "mono8") {
-      // 单通道灰度图
-      frame = cv::Mat(msg->height, msg->width, CV_8UC1);
-      memcpy(frame.data, msg->data.data(), msg->data.size());
+    if (msg->encoding == sensor_msgs::image_encodings::MONO8) {
+      // 单通道：零拷贝共享
+      auto cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::MONO8);
+      gray_frame = cv_ptr->image; // 已经是灰度
+    } else if (msg->encoding == sensor_msgs::image_encodings::BGR8) {
+      // BGR：零拷贝共享，再转灰度
+      auto cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
+      cv::cvtColor(cv_ptr->image, gray_frame, cv::COLOR_BGR2GRAY);
+    } else if (msg->encoding == sensor_msgs::image_encodings::RGB8) {
+      // RGB：用 cv_bridge 转成 BGR（复制/转换一次），再转灰度
+      auto cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+      cv::cvtColor(cv_ptr->image, gray_frame, cv::COLOR_BGR2GRAY);
     } else {
       RCLCPP_WARN(get_logger(), "Unsupported image encoding: %s", msg->encoding.c_str());
       return;
     }
 
-    // 转换为灰度图（如果不是已经是灰度的话）
-    cv::Mat gray_frame;
-    if (frame.channels() == 3) {
-      cv::cvtColor(frame, gray_frame, cv::COLOR_BGR2GRAY);
-    } else {
-      gray_frame = frame.clone(); // 已经是灰度图，复制一份
-    }
-
-    // RCLCPP_WARN(get_logger(), "Processed image size: %d x %d, channels: %d", gray_frame.cols,
-    //             gray_frame.rows, gray_frame.channels());
-
-    // 验证图像有效性
     if (gray_frame.empty() || gray_frame.channels() != 1) {
       RCLCPP_ERROR(get_logger(), "Invalid gray frame for VINS processing");
       return;
     }
 
-    // 等待初始化完成，避免在系统未完全准备好时调用estimator
-    // static int frame_count = 0;
-    // frame_count++;
-    // if (frame_count < 30) { // 跳过前30帧，给系统时间初始化
-    //   RCLCPP_WARN(get_logger(), "Skipping frame %d (waiting for initialization)", frame_count);
-    //   return;
-    // }
+    // 送入估计器
+    _estimator->inputImage(timestamp, gray_frame);
 
-    // 调用estimator处理图像
-    
-      // cv::imwrite("/home/sim/ros2-algorithm-sim/src/slam/debug_images/image_" +
-      //             std::to_string(debugImageCount++) + ".png", gray_frame);
-      // debugImageCount++;
-      _estimator->inputImage(timestamp, gray_frame);
-      // RCLCPP_WARN(get_logger(), "Image sent to estimator successfully");
-      if (!_estimator->isInitialized()) {
-        RCLCPP_WARN(this->get_logger(),
-            "[estimator]: System not initialized, cannot calculate target NED");
-      }else{
-        RCLCPP_WARN(this->get_logger(),
-                    "[estimator]: System initialized, can calculate target NED");
-      }
+    if (!_estimator->isInitialized()) {
+      RCLCPP_WARN(this->get_logger(),
+                  "[estimator]: System not initialized, cannot calculate target NED");
+    } else {
+      RCLCPP_WARN(this->get_logger(), "[estimator]: System initialized, can calculate target NED");
+    }
+  } catch (const cv_bridge::Exception &e) {
+    // 建议专门捕获 cv_bridge 的异常
+    RCLCPP_ERROR(get_logger(), "cv_bridge conversion error: %s", e.what());
   } catch (const std::exception &e) {
     RCLCPP_ERROR(get_logger(), "Image processing error: %s", e.what());
-    return;
   }
 }
+
 } // namespace slam_composition
 #include "rclcpp_components/register_node_macro.hpp"
 

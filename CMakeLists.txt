@@ -33,6 +33,7 @@ find_package(ament_cmake REQUIRED)
 set(sim_msgs_DIR "${PROJECT_CURRENT_SOURCE_DIR}/../../install/sim_msgs/share/sim_msgs/cmake")
 find_package(ament_cmake REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(cv_bridge REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -102,6 +103,7 @@ set(SLAM_COMPONENT_DEPS
   nav_msgs
   mavros_msgs
   mavros
+  cv_bridge
   )
 
 include_directories(
